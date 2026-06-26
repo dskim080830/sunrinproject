@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Vercel 클라우드 배리어프리 내비게이션 v12.0</title>
+    <title>Vercel 클라우드 배리어프리 내비게이션 v12.1</title>
     <style>
         :root {
             --bg-main: #f8fafc; --panel-bg: #ffffff; --text-dark: #0f172a; --text-muted: #64748b;
@@ -26,11 +26,14 @@
         .line-badge { font-size: 11px; padding: 3px 8px; border-radius: 20px; color: white; font-weight: bold; background: #475569; }
         .ev-result-tag { background: #fffbeb; border: 1px solid #fde68a; color: #b45309; padding: 8px 12px; border-radius: 8px; font-size: 13px; font-weight: 700; margin-top: 10px; }
         .log-box { background: #0f172a; color: #38bdf8; font-family: monospace; font-size: 11px; padding: 12px; border-radius: 8px; height: 110px; overflow-y: auto; }
-        #map { flex-grow: 1; height: 100%; background: #e2e8f0; }
-        .map-error-overlay { position: absolute; top: 50%; left: 55%; transform: translate(-50%, -50%); text-align: center; color: #64748b; font-size: 14px; font-weight: bold; line-height: 1.6; pointer-events: none; }
+        
+        /* 지도 레이아웃 가시화 설정 고도화 */
+        #map-container { flex-grow: 1; height: 100%; position: relative; background: #e2e8f0; }
+        #map { width: 100%; height: 100%; position: absolute; top: 0; left: 0; }
+        .map-error-overlay { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); text-align: center; color: #64748b; font-size: 14px; font-weight: bold; line-height: 1.6; z-index: 5; pointer-events: none; }
     </style>
 
-    <script type="text/javascript" src="https://dapi.kakao.com/v2/maps/sdk.js?appkey=YOUR_KAKAO_JAVASCRIPT_KEY"></script>
+    <script type="text/javascript" src="https://dapi.kakao.com/v2/maps/sdk.js?appkey=YOUR_KAKAO_JAVASCRIPT_KEY&autoload=false"></script>
 </head>
 <body>
 
@@ -60,10 +63,12 @@
         </div>
     </div>
 
-    <div id="map"></div>
-    <div id="mapError" class="map-error-overlay">
-        🗺 카카오 지도 모듈 대기 중...<br>
-        <span style="font-size:12px; font-weight:normal; color:#94a3b8;">(Vercel 도메인 배포 주소(예: *.vercel.app)를 카카오 개발자 센터 플랫폼 웹에 꼭 추가해 주세요)</span>
+    <div id="map-container">
+        <div id="map"></div>
+        <div id="mapError" class="map-error-overlay">
+            🗺 카카오 지도 모듈 대기 중...<br>
+            <span style="font-size:12px; font-weight:normal; color:#94a3b8;">(키 및 도메인 체크 실패 시 안전 텍스트 모드가 실행됩니다)</span>
+        </div>
     </div>
 
 <script>
@@ -71,7 +76,6 @@
     const KEY_DATA_GO_KR      = "64486l597y6dsk104ywETQ";          
     const KEY_REALTIME_POS   = "47766a6d5864736b39314d65754a44";   
 
-    // ⭐ 타사 프록시 허브 제거 -> 본인 Vercel 내부 백엔드 라우트 적용
     const VERCEL_PROXY = "/api/proxy?url=";
     let kakaoMap = null;
 
@@ -82,16 +86,20 @@
         box.scrollTop = box.scrollHeight;
     }
 
+    // ⭐ 카카오 공식 비동기 안전 로딩 방식 적용
     function initKakaoMap() {
         try {
             if (typeof kakao !== 'undefined' && kakao.maps) {
-                const container = document.getElementById('map');
-                const options = { center: new kakao.maps.LatLng(37.5665, 126.9780), level: 7 };
-                kakaoMap = new kakao.maps.Map(container, options);
-                document.getElementById('mapError').style.display = 'none';
-                pushLog("🗺 [Vercel Edge] 카카오 지도 캔버스 할당 성공.");
+                // 스크립트 라이브러리가 완전히 완전히 로딩된 후 맵 생성 보장
+                kakao.maps.load(function() {
+                    const container = document.getElementById('map');
+                    const options = { center: new kakao.maps.LatLng(37.5665, 126.9780), level: 7 };
+                    kakaoMap = new kakao.maps.Map(container, options);
+                    document.getElementById('mapError').style.display = 'none';
+                    pushLog("🗺 [Vercel Edge] 카카오 지도 캔버스 할당 성공.");
+                });
             } else {
-                pushLog("⚠ 카카오 지도가 텍스트 백업 모드로 구동됩니다. (도메인 승인 필요)");
+                pushLog("⚠ 카카오 지도가 텍스트 백업 모드로 구동됩니다. (키 인증 혹은 도메인 승인 필요)");
             }
         } catch (e) {
             pushLog("⚠ 지도 모듈 비활성화 상태");
@@ -182,7 +190,7 @@
 
         resultBox.innerHTML = `
             <div class="live-card">📢 <b>${startStation}역</b> 실시간 도착: <span style="color:var(--red); font-weight:700;">${startMeta.train} (${startMeta.msg})</span></div>
-            <div class="live-card" style="background:#eff6ff; border-color:#bfdbfe; color:#1e40af;">📡 <b>${startMeta.lineName}</b> 실시간 열차 위치: <b>${lineTrackPos}</b></div>
+            <div class="live-card" style="background:#eff6ff; border-color:#bfdbfe; color:#1e40af;">📡 <b>${startMeta.lineName}</b> 실시간 전동차 위치: <b>${lineTrackPos}</b></div>
             <div class="target-box">
                 <div class="target-title"><span>🛫 실시간 승차: <b>${startStation}역</b></span><span class="line-badge">${startMeta.lineName}</span></div>
                 <div class="ev-result-tag">♿ 실제 API 연계 최단 EV 도어: <b>${startEv.door}</b></div>
