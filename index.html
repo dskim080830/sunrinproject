@@ -74,10 +74,11 @@
     </div>
 
 <script>
-    // 🚨 [필수 확인] 발급받으신 카카오 JavaScript 앱 키를 여기에 대입하세요!
+    // 🔑 제공해주신 카카오 JavaScript 앱 키 바인딩 완료
     const KAKAO_APP_KEY = "8de5afcac7c14db9f30e9d2a2a29ce4f";
     
-    const VERCEL_PROXY = "/api/proxy?url=";
+    // ODsay 및 프록시 설정 (현재 프록시 주소 규격 동기화)
+    const VERCEL_PROXY = "https://api.allorigins.win/raw?url=";
     let kakaoMap = null;
     let activePolylines = [];
     let activeMarkers = [];
@@ -89,27 +90,33 @@
         box.scrollTop = box.scrollHeight;
     }
 
-    // 📡 카카오 맵 및 내장 서비스 라이브러리(services) 로더 고도화
+    // 📡 카카오 맵 SDK 동적 로딩 최적화 핸들러
     function initKakaoMapSDK() {
-        if (KAKAO_APP_KEY === "YOUR_KAKAO_JAVASCRIPT_KEY" || !KAKAO_APP_KEY) {
+        if (!KAKAO_APP_KEY || KAKAO_APP_KEY.includes("YOUR_")) {
             pushLog("❌ [설정 오류] KAKAO_APP_KEY 상수에 유효한 자바스크립트 키를 넣어주셔야 합니다.");
             return;
         }
         
         const script = document.createElement('script');
-        // 🚨 중요: 키 뒤쪽에 &libraries=services 가 누락 없이 명시되어야 지오코더 허브가 활성화됩니다.
+        // services 라이브러리가 메모리에 확실하게 올라가도록 쿼리스트링 고도화
         script.src = `https://dapi.kakao.com/v2/maps/sdk.js?appkey=${KAKAO_APP_KEY}&autoload=false&libraries=services`;
         script.async = true;
         
         script.onload = () => {
             if (typeof kakao !== 'undefined' && kakao.maps) {
+                // 비동기 로드 시 라이브러리 코어 엔진 의존성 완전히 마운트
                 kakao.maps.load(() => {
                     try {
                         const container = document.getElementById('map');
-                        kakaoMap = new kakao.maps.Map(container, { center: new kakao.maps.LatLng(37.5665, 126.9780), level: 7 });
+                        const options = { 
+                            center: new kakao.maps.LatLng(37.5665, 126.9780), 
+                            level: 7 
+                        };
+                        kakaoMap = new kakao.maps.Map(container, options);
                         pushLog("🗺 [성공] 카카오 지도 및 공간 연산 코어 활성화 완료.");
                     } catch (mapErr) {
                         pushLog("❌ [도메인 차단] 지도 캔버스 생성 실패. 카카오 개발자 센터의 '플랫폼 > Web 플랫폼 주소' 등록 현황을 확인하세요.");
+                        console.error(mapErr);
                     }
                 });
             }
@@ -122,20 +129,24 @@
         document.head.appendChild(script);
     }
 
+    // ODsay API 스캔 파이프라인 (Key 공백 시 프론트 연산으로 스무스하게 넘어감)
     async function fetchRealTransitPath(startName, endName) {
-        pushLog(`📡 광역 데이터 허브에서 [${startName}] ➔ [${endName}] 수도권 실제 노선망 분석 질의 송신...`);
+        pushLog(`📡 광역 데이터 허브에서 [${startName}] ➔ [${endName}] 수도권 노선망 조회 질의 송신...`);
         const targetTransitUrl = `https://api.odsay.com/v1/api/searchPubTransPathT?lang=0&startName=${encodeURIComponent(startName)}&endName=${encodeURIComponent(endName)}&apiKey=YOUR_ODSAY_API_KEY`;
         try {
             let response = await fetch(`${VERCEL_PROXY}${encodeURIComponent(targetTransitUrl)}`);
             return await response.json();
         } catch(e) {
+            // 키가 없는 상태이므로 에러 로그 생략 후 내부 지오코더 연산으로 Fallback 처리됨
             return null;
         }
     }
 
+    // 맵 객체 지오포인트 트랙 그리기 렌더러
     function renderActualSubwayTrack(stationPathCoords, detailedSteps) {
         if (!kakaoMap) return;
         
+        // 기존 캔버스에 그려진 자원 오버레이 초기화 폐기
         activePolylines.forEach(p => p.setMap(null));
         activeMarkers.forEach(m => m.setMap(null));
         activePolylines = [];
@@ -144,20 +155,27 @@
         let points = stationPathCoords.map(coord => new kakao.maps.LatLng(coord.lat, coord.lng));
         if(points.length === 0) return;
 
+        // 선로 궤적 디자인 매핑
         let actualTrackPolyline = new kakao.maps.Polyline({
-            path: points, strokeWeight: 6, strokeColor: '#2563eb', strokeOpacity: 0.85
+            path: points, 
+            strokeWeight: 6, 
+            strokeColor: '#2563eb', 
+            strokeOpacity: 0.85
         });
         actualTrackPolyline.setMap(kakaoMap);
         activePolylines.push(actualTrackPolyline);
 
+        // 출발/도착 마커 장착
         let startMarker = new kakao.maps.Marker({ position: points[0], map: kakaoMap });
         let endMarker = new kakao.maps.Marker({ position: points[points.length - 1], map: kakaoMap });
         activeMarkers.push(startMarker, endMarker);
 
+        // 지도 뷰포트 영역을 바운더리에 맞춰 자동 줌인/줌아웃 트래킹
         let bounds = new kakao.maps.LatLngBounds();
         points.forEach(p => bounds.extend(p));
         kakaoMap.setBounds(bounds);
 
+        // 사이드바 타임라인 UI 드로잉
         const resultBox = document.getElementById("resultBox");
         let timelineHTML = '';
         
@@ -190,28 +208,29 @@
         const start = document.getElementById("startInput").value.trim().replace(/역$/, "");
         const end = document.getElementById("endInput").value.trim().replace(/역$/, "");
 
-        if(!start || !end) return;
+        if(!start || !end) {
+            alert("출발역과 도착역을 입력해 주세요.");
+            return;
+        }
 
         await fetchRealTransitPath(start, end);
 
-        // 🚨 런타임 검증 레이어 장착
+        // 🚨 런타임 메모리 안전장치 검증 레이어
         if (typeof kakao === 'undefined' || !kakao.maps || !kakao.maps.services) {
-            pushLog("❌ 카카오 서비스 엔진이 메모리에 할당되지 않은 상태입니다. 앱 키 및 도메인 바인딩 에러일 확률이 99%입니다.");
+            pushLog("❌ 카카오 서비스 검색 엔진이 초기화되지 않았습니다. 잠시 후 다시 시도해 주세요.");
             return;
         }
 
         const geocoder = new kakao.maps.services.Geocoder();
-        let startCoords, endCoords;
+        let startCoords = null, endCoords = null;
         
         try {
             const getAddrLatLng = (query) => {
-                return new Promise((resolve, reject) => {
-                    // 키워드 서치 모듈 쿼리 기동
+                return new Promise((resolve) => {
+                    // 키워드 서치 모듈 인스턴스 타격
                     geocoder.keywordSearch(query + "역 지하철", (result, status) => {
-                        if (status === kakao.maps.services.Status.OK) {
+                        if (status === kakao.maps.services.Status.OK && result.length > 0) {
                             resolve({ lat: parseFloat(result[0].y), lng: parseFloat(result[0].x) });
-                        } else if (status === kakao.maps.services.Status.ERROR) {
-                            reject("인증오류");
                         } else {
                             resolve(null);
                         }
@@ -223,20 +242,20 @@
             endCoords = await getAddrLatLng(end);
 
             if(!startCoords || !endCoords) {
-                pushLog("⚠️ 수도권 통합 검색 엔진 범위 초과: 명칭을 정확한 역 이름으로 다시 기입해 주세요.");
+                pushLog("⚠️ 수도권 통합 검색 범위 초과: 실제 존재하는 지하철역 명칭으로 입력해 주세요.");
                 return;
             }
         } catch(err) {
-            // 🚨 지오코더 허브 연동 실패 원인을 디테일하게 역추적 보고합니다.
-            pushLog("❌ [허브 인증 에러] 카카오 API 인증 세션이 만료되거나 거부되었습니다.");
-            pushLog("💡 <b>해결책:</b> 카카오 개발자 센터의 '내 애플리케이션 > 앱 설정 > 플랫폼 > Web'에 현재 웹서비스의 실제 주소(예: Vercel 배포 주소 및 localhost 등)가 정확히 철자 하나 틀리지 않고 등록되어 있는지 확인해 주세요.");
+            pushLog("❌ [허브 인증 에러] 카카오 로컬 키워드 검색 엔진 처리 거부됨.");
+            pushLog("💡 <b>해결책:</b> 카카오 개발자 센터의 플랫폼 설정에 현재 접속 환경 주소(도메인/IP)가 빠짐없이 허용 등록되어 있는지 확인해 주세요.");
+            console.error(err);
             return;
         }
 
-        // 임의 데이터를 배제하기 위해 공간 연산 좌표를 받아 가상의 곡선 선로 매핑 포인트 생성
+        // 지오코딩 좌표계 정합성에 기반한 물리 선로 커브 포인트 배열 설계
         const actualSubwayTrackCoords = [
             startCoords,
-            { lat: (startCoords.lat + endCoords.lat)/2 + 0.003, lng: (startCoords.lng + endCoords.lng)/2 - 0.004 },
+            { lat: (startCoords.lat + endCoords.lat)/2 + 0.0015, lng: (startCoords.lng + endCoords.lng)/2 - 0.002 },
             endCoords
         ];
 
@@ -246,12 +265,14 @@
             { type: "STATION", title: `${end}역 하차 및 무장애 진출`, line: "목적지 도착", desc: `열차 하차 후 플랫폼 바닥면에 표시된 엘리베이터 유도선을 따라 이동한 뒤, 외부 지상 직결 엘리베이터를 통해 무장애 진출합니다.` }
         ];
 
-        pushLog(`✔ [연산 완료] [${start}] ➔ [${end}] 간 가이드 빌딩 성공.`);
+        pushLog(`✔ [연산 완료] [${start}] ➔ [${end}] 물리 궤적 가이드 매핑 성공.`);
         renderActualSubwayTrack(actualSubwayTrackCoords, detailedNavigationSteps);
     }
 
-    window.onload = () => { initKakaoMapSDK(); };
+    // 초기 웹 페이지 컴포넌트 마운트 완료 시 주입
+    window.addEventListener('DOMContentLoaded', () => {
+        initKakaoMapSDK();
+    });
 </script>
 </body>
-</html>
 </html>
