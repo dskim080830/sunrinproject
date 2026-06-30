@@ -75,7 +75,7 @@
 
 <script>
     const KAKAO_APP_KEY = "8de5afcac7c14db9f30e9d2a2a29ce4f";
-    const ODSAY_API_KEY = "YOUR_ODSAY_API_KEY"; // 💡 키를 발급받으시면 여기에 대입하세요.
+    const ODSAY_API_KEY = "YOUR_ODSAY_API_KEY"; 
     const VERCEL_PROXY = "https://api.allorigins.win/raw?url=";
     
     let kakaoMap = null;
@@ -115,15 +115,12 @@
         document.head.appendChild(script);
     }
 
-    // ⚡ [속도 최적화] ODsay API 키가 더미 상태면 프록시 네트워크 요청을 아예 차단하여 지연시간 0ms로 단축
     async function fetchRealTransitPath(startName, endName) {
         if (!ODSAY_API_KEY || ODSAY_API_KEY.includes("YOUR_")) {
             return null; 
         }
-        
-        pushLog(`📡 광역 데이터 허브 질의 송신...`);
-        const targetTransitUrl = `https://api.odsay.com/v1/api/searchPubTransPathT?lang=0&startName=${encodeURIComponent(startName)}&endName=${encodeURIComponent(endName)}&apiKey=${ODSAY_API_KEY}`;
         try {
+            const targetTransitUrl = `https://api.odsay.com/v1/api/searchPubTransPathT?lang=0&startName=${encodeURIComponent(startName)}&endName=${encodeURIComponent(endName)}&apiKey=${ODSAY_API_KEY}`;
             let response = await fetch(`${VERCEL_PROXY}${encodeURIComponent(targetTransitUrl)}`);
             return await response.json();
         } catch(e) {
@@ -193,7 +190,6 @@
             return;
         }
 
-        // ODsay 요청과 카카오 좌표 조회를 비동기로 분리하거나 생략하여 가속화
         await fetchRealTransitPath(start, end);
 
         if (typeof kakao === 'undefined' || !kakao.maps || !kakao.maps.services) {
@@ -201,18 +197,22 @@
             return;
         }
 
+        // 💡 [해결] 각각 올바른 전용 인스턴스 할당하여 TypeError 완전 제거
         const geocoder = new kakao.maps.services.Geocoder();
+        const places = new kakao.maps.services.Places();
+        
         let startCoords = null, endCoords = null;
         
-        // ⚡ [속도 최적화] Promise.all을 활용하여 출발역/도착역 좌표 검색을 병렬(동시) 처리해 속도 2배 향상
         try {
             const getAddrLatLng = (query) => {
                 return new Promise((resolve) => {
+                    // 1단계 주소 검색 시도
                     geocoder.addressSearch(query + "역", (result, status) => {
                         if (status === kakao.maps.services.Status.OK && result.length > 0) {
                             resolve({ lat: parseFloat(result[0].y), lng: parseFloat(result[0].x) });
                         } else {
-                            geocoder.keywordSearch(query + "역 지하철", (kResult, kStatus) => {
+                            // 2단계: 주소에 없을 시 Places 인스턴스의 keywordSearch 사용 (올바른 메서드 호출)
+                            places.keywordSearch(query + "역 지하철", (kResult, kStatus) => {
                                 if (kStatus === kakao.maps.services.Status.OK && kResult.length > 0) {
                                     resolve({ lat: parseFloat(kResult[0].y), lng: parseFloat(kResult[0].x) });
                                 } else {
@@ -224,7 +224,6 @@
                 });
             };
 
-            // 동시 연산 요청
             const [resStart, resEnd] = await Promise.all([getAddrLatLng(start), getAddrLatLng(end)]);
             startCoords = resStart;
             endCoords = resEnd;
@@ -237,7 +236,7 @@
                 return;
             }
         } catch(err) {
-            pushLog("❌ 비상용 궤적 파이프라인 작동.");
+            pushLog("❌ 비상용 안전 좌표계 작동.");
             startCoords = { lat: 37.476058, lng: 126.867943 };
             endCoords = { lat: 37.565704, lng: 126.976873 };
         }
@@ -254,7 +253,7 @@
             { type: "STATION", title: `${end}역 하차 및 무장애 진출`, line: "목적지 도착", desc: `열차 하차 후 플랫폼 바닥면에 표시된 엘리베이터 유도선을 따라 이동한 뒤, 외부 지상 직결 엘리베이터를 통해 무장애 진출합니다.` }
         ];
 
-        pushLog(`✔ [연산 완료] [${start}] ➔ [${end}] 연산 대기 시간 제로화 성공.`);
+        pushLog(`✔ [연산 완료] [${start}] ➔ [${end}] 검색 모듈 가속 연산 성공.`);
         renderActualSubwayTrack(actualSubwayTrackCoords, detailedNavigationSteps);
     }
 
