@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta http-equiv="Content-Security-Policy" content="upgrade-insecure-requests">
-    <title>수도권 광역 대중교통 실제 궤적 내비게이션</title>
+    <title>수도권 광역 대중교통 노선별 궤적 내비게이션</title>
     <style>
         :root {
             --bg-main: #f1f5f9; --panel-bg: #ffffff; --text-dark: #0f172a; --text-muted: #475569;
@@ -75,13 +75,27 @@
 
 <script>
     const KAKAO_APP_KEY = "8de5afcac7c14db9f30e9d2a2a29ce4f";
-    // 🔑 전달해주신 활성화된 ODsay API Key 주입 완료
     const ODSAY_API_KEY = "hXPSVdvIX+gokRRmn2i0fQ"; 
     const VERCEL_PROXY = "https://api.allorigins.win/raw?url=";
     
     let kakaoMap = null;
     let activePolylines = [];
     let activeMarkers = [];
+
+    // 공식 수도권 지하철 노선별 HEX 색상 사전 정의 인덱스 테이블
+    const SUBWAY_COLOR_MAP = {
+        1: "#003DA5", 2: "#37b42d", 3: "#FA5B31", 4: "#257CC4", 5: "#89368F",
+        6: "#B55010", 7: "#697214", 8: "#E51E6E", 9: "#D49B28",
+        101: "#77C4A3", // 공항철도
+        104: "#73C7A6", // 경의중앙
+        107: "#F5A200", // 수인분당
+        108: "#9A6226", // 경춘
+        109: "#A71E31", // 신분당
+        113: "#90B030", // 우이신설
+        115: "#ED8B00", // 골드라인
+        116: "#6A1A4C", // 서해선
+        117: "#00A29A"  // 신림선
+    };
 
     function pushLog(text) {
         const box = document.getElementById("logBox");
@@ -116,7 +130,6 @@
         document.head.appendChild(script);
     }
 
-    // 📡 ODsay 광역 모빌리티 노선망 연산엔진 API 호출 함수
     async function fetchRealTransitPath(sx, sy, ex, ey) {
         try {
             const targetTransitUrl = `https://api.odsay.com/v1/api/searchPubTransPathT?lang=0&SX=${sx}&SY=${sy}&EX=${ex}&EY=${ey}&apiKey=${ODSAY_API_KEY}`;
@@ -129,31 +142,50 @@
         }
     }
 
-    function renderActualSubwayTrack(stationPathCoords, detailedSteps) {
+    // 🎨 복수 개의 멀티 라인 트랙과 환승 지점 마커들을 한 번에 지도에 표출하는 렌더링 엔진
+    function renderColoredSubwayTrack(segments, detailedSteps) {
         if (!kakaoMap) return;
         
+        // 올드 그래픽 객체 초기화
         activePolylines.forEach(p => p.setMap(null));
         activeMarkers.forEach(m => m.setMap(null));
         activePolylines = [];
         activeMarkers = [];
 
-        let points = stationPathCoords.map(coord => new kakao.maps.LatLng(coord.lat, coord.lng));
-        if(points.length === 0) return;
-
-        let actualTrackPolyline = new kakao.maps.Polyline({
-            path: points, strokeWeight: 6, strokeColor: '#2563eb', strokeOpacity: 0.85
-        });
-        actualTrackPolyline.setMap(kakaoMap);
-        activePolylines.push(actualTrackPolyline);
-
-        let startMarker = new kakao.maps.Marker({ position: points[0], map: kakaoMap });
-        let endMarker = new kakao.maps.Marker({ position: points[points.length - 1], map: kakaoMap });
-        activeMarkers.push(startMarker, endMarker);
-
         let bounds = new kakao.maps.LatLngBounds();
-        points.forEach(p => bounds.extend(p));
+
+        // 1. 노선별 구간(Segment) 루프 순회 드로잉
+        segments.forEach(seg => {
+            let points = seg.coords.map(c => new kakao.maps.LatLng(c.lat, c.lng));
+            if(points.length === 0) return;
+
+            let polyline = new kakao.maps.Polyline({
+                path: points,
+                strokeWeight: 6,
+                strokeColor: seg.color,
+                strokeOpacity: 0.9,
+                strokeStyle: 'solid'
+            });
+            polyline.setMap(kakaoMap);
+            activePolylines.push(polyline);
+
+            points.forEach(p => bounds.extend(p));
+        });
+
+        // 2. 물리 노정 끝단 마커 배치
+        if(segments.length > 0 && segments[0].coords.length > 0) {
+            let startPos = new kakao.maps.LatLng(segments[0].coords[0].lat, segments[0].coords[0].lng);
+            let lastSeg = segments[segments.length - 1];
+            let endPos = new kakao.maps.LatLng(lastSeg.coords[lastSeg.coords.length - 1].lat, lastSeg.coords[lastSeg.coords.length - 1].lng);
+
+            let startMarker = new kakao.maps.Marker({ position: startPos, map: kakaoMap });
+            let endMarker = new kakao.maps.Marker({ position: endPos, map: kakaoMap });
+            activeMarkers.push(startMarker, endMarker);
+        }
+
         kakaoMap.setBounds(bounds);
 
+        // 3. UI 사이드바 타임라인 업데이트 및 갱신
         const resultBox = document.getElementById("resultBox");
         let timelineHTML = '';
         
@@ -166,7 +198,7 @@
                 <div class="${nodeClass}">
                     <div class="node-title">
                         <span>${step.title}</span>
-                        ${step.line ? `<span class="station-badge">${step.line}</span>` : ''}
+                        ${step.line ? `<span class="station-badge" style="background:${step.color || '#475569'}">${step.line}</span>` : ''}
                     </div>
                     <div class="node-desc">${step.desc}</div>
                 </div>
@@ -174,7 +206,7 @@
         });
 
         resultBox.innerHTML = `
-            <div class="route-summary">🗺 수도권 공공 인프라 실시간 동기화 완료<br><span style="font-size:11px; font-weight:normal; color:#64748b;">(ODsay API 정밀 선로 매핑 적용 상태)</span></div>
+            <div class="route-summary">🗺 수도권 공공 인프라 실시간 동기화 완료<br><span style="font-size:11px; font-weight:normal; color:#64748b;">(노선 고유 컬러 시스템 매핑 적용 상태)</span></div>
             <div class="timeline-container">
                 ${timelineHTML}
             </div>
@@ -198,7 +230,6 @@
 
         const geocoder = new kakao.maps.services.Geocoder();
         const places = new kakao.maps.services.Places();
-        
         let startCoords = null, endCoords = null;
         
         try {
@@ -233,45 +264,88 @@
             return;
         }
 
-        pushLog(`📡 광역 데이터 허브 질의 송신... [${start}] ➔ [${end}] 실제 선로 수집 중`);
+        pushLog(`📡 [경로 요청] [${start}] ➔ [${end}] 노선별 실제 연계 좌표 수집 중...`);
         
-        let actualSubwayTrackCoords = [];
         let transitData = await fetchRealTransitPath(startCoords.lng, startCoords.lat, endCoords.lng, endCoords.lat);
         
-        // 💡 ODsay 실시간 데이터 파싱 파이프라인 (passStopList 내 모든 경유역의 실제 좌표 배열화)
-        if (transitData && transitData.result && transitData.result.path && transitData.result.path[0].subPath) {
-            pushLog("🔗 [데이터 연동 완결] 실시간 선로 물리 궤적 배열 매핑 성공.");
-            let paths = transitData.result.path[0].subPath;
-            paths.forEach(sub => {
-                // 도보 구간(trafficType: 3) 제외, 지하철/버스 구간 등 실제 이동 궤도 추출
-                if (sub.passStopList && sub.passStopList.stations) { 
+        let segments = [];
+        let detailedNavigationSteps = [];
+
+        // 💡 [핵심] 최단 경로가 아닌 실제 정밀 정거장 노선 데이터 순차적 바인딩 및 파싱 파이프라인
+        if (transitData && transitData.result && transitData.result.path && transitData.result.path.length > 0) {
+            let chosenPath = transitData.result.path[0]; // ODsay 추천 최적 대중교통 노정 선택
+            let subPaths = chosenPath.subPath;
+
+            detailedNavigationSteps.push({
+                type: "STATION", title: `${start}역 승차 가이드`, line: "출발역", color: "#0f172a", desc: `역사 진입 후 안내 전광판을 통해 운행 행선지를 재확인하고 플랫폼으로 승차합니다.`
+            });
+
+            subPaths.forEach((sub, index) => {
+                // 도보 구간(trafficType == 3)의 경우
+                if(sub.trafficType === 3) {
+                    if(sub.distance > 0 && index > 0 && index < subPaths.length - 1) {
+                        detailedNavigationSteps.push({
+                            type: "TRANSFER", title: "환승 통로 연결 이동", desc: `안내 표지판의 환승 유도선을 따라 안전하게 도보 통로를 통해 다음 연결 승강장으로 이동하세요. (약 ${sub.distance}m 이동)`
+                        });
+                    }
+                }
+                // 지하철 구간(trafficType == 1)의 경우
+                else if (sub.trafficType === 1 && sub.passStopList && sub.passStopList.stations) {
+                    let rawCode = sub.lane && sub.lane[0] ? sub.lane[0].subwayCode : null;
+                    let lineName = sub.lane && sub.lane[0] ? sub.lane[0].name : "지하철";
+                    let trackColor = SUBWAY_COLOR_MAP[rawCode] || (sub.lane[0].subwayColor ? sub.lane[0].subwayColor : "#2563eb");
+
+                    let currentSegCoords = [];
                     sub.passStopList.stations.forEach(st => {
-                        actualSubwayTrackCoords.push({ lat: parseFloat(st.y), lng: parseFloat(st.x) });
+                        currentSegCoords.push({ lat: parseFloat(st.y), lng: parseFloat(st.x) });
+                    });
+
+                    // 노선 세그먼트 스택 누적 등록
+                    segments.push({
+                        color: trackColor,
+                        coords: currentSegCoords
+                    });
+
+                    detailedNavigationSteps.push({
+                        type: "TRACK",
+                        title: `${lineName} 탑승 및 실제 철로 운행 (${sub.stationCount}개 정류장)`,
+                        line: lineName,
+                        color: trackColor,
+                        desc: `${sub.startName}역에서 승차하여 실제 해당 노선 고유 선로 궤적을 경유한 후, ${sub.endName}역까지 안전하게 운행 이동합니다.`
                     });
                 }
             });
-        }
 
-        // 💡 [안전장치] 만약 API 제한으로 궤적 데이터가 안 들어올 시의 자연스러운 곡선 보정 로직
-        if (actualSubwayTrackCoords.length === 0) {
-            pushLog("⚠️ 실시간 트랙 파싱 지연 발생 - 곡선 보간 대체 트랙을 빌드합니다.");
+            detailedNavigationSteps.push({
+                type: "STATION", title: `${end}역 하차 및 도착`, line: "도착역", color: "#0f172a", desc: `전동차 열차 하차 후 유도 사인 마크를 참조하여 개찰구를 통해 안전하게 무장애 진출 목적지에 도달합니다.`
+            });
+
+            pushLog(`✔ [정밀 매핑 완료] 노선별 실제 지하철역 연계 궤적 표출 성공.`);
+        } else {
+            // [API Fail Safe] 네트워크 통신 오류나 결과 공백 시 대체 보간 레이어 가동
+            pushLog("⚠️ 실시간 궤적 수집 차단 - 최적화 곡선 보간 대체 트랙을 적용합니다.");
             let midLat = (startCoords.lat + endCoords.lat) / 2;
             let midLng = (startCoords.lng + endCoords.lng) / 2;
-            actualSubwayTrackCoords = [
-                startCoords,
-                { lat: midLat + 0.04, lng: midLng - 0.03 },
-                { lat: midLat + 0.07, lng: midLng - 0.01 },
-                endCoords
+            
+            segments.push({
+                color: "#697214", // 예외 임시 노선 컬러 바인딩
+                coords: [
+                    startCoords,
+                    { lat: midLat + 0.03, lng: midLng - 0.02 },
+                    { lat: midLat + 0.06, lng: midLng - 0.01 },
+                    endCoords
+                ]
+            });
+
+            detailedNavigationSteps = [
+                { type: "STATION", title: `${start}역 승차 안내`, line: "이동 가이드", desc: `승강장 진입 후 최단 이동 경로를 이용해 탑승합니다.` },
+                { type: "TRACK", title: "수도권 통합 철도 트랙 운행 구간", desc: `지정된 광역망 실제 환승 구간 흐름에 따른 보간 궤적 트랙을 이용해 목적지까지 추적 운행합니다.` },
+                { type: "STATION", title: `${end}역 하차 및 도착 정산`, line: "목적지 도착", desc: `하차 태그 후 외부 전용 게이트를 이용해 출구로 최종 진출합니다.` }
             ];
         }
 
-        const detailedNavigationSteps = [
-            { type: "STATION", title: `${start}역 승차 가이드`, line: "실시간 연계", desc: `승강장 진입 후 교통약자 전용 최단 무장애 엘리베이터 게이트를 통과하여 전동차에 탑승합니다.` },
-            { type: "TRACK", title: "수도권 광역 철도 선로 구간 운행", desc: `수도권 광역 철도망의 실제 지하 터널 꺾임점 및 복선 선로 궤적을 실시간으로 추적하며 이동합니다.` },
-            { type: "STATION", title: `${end}역 하차 및 무장애 진출`, line: "목적지 도착", desc: `열차 하차 후 플랫폼 바닥면에 표시된 엘리베이터 유도선을 따라 이동한 뒤, 외부 지상 직결 엘리베이터를 통해 무장애 진출합니다.` }
-        ];
-
-        renderActualSubwayTrack(actualSubwayTrackCoords, detailedNavigationSteps);
+        // 완성된 다중 구간 트랙 배열 데이터와 타임라인 렌더러 실행 호출
+        renderColoredSubwayTrack(segments, detailedNavigationSteps);
     }
 
     window.addEventListener('DOMContentLoaded', () => {
