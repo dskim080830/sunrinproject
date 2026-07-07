@@ -1,283 +1,723 @@
 <!DOCTYPE html>
 <html lang="ko">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>수도권 광역 대중교통 노선별 궤적 내비게이션</title>
-    <style>
-        :root {
-            --bg-main: #f1f5f9; --panel-bg: #ffffff; --text-dark: #0f172a; --text-muted: #475569;
-            --primary: #10b981; --accent: #2563eb; --border: #e2e8f0; --red: #ef4444;
-        }
-        * { box-sizing: border-box; }
-        body { font-family: -apple-system, BlinkMacSystemFont, "Malgun Gothic", sans-serif; margin: 0; padding: 0; display: flex; height: 100vh; background: var(--bg-main); overflow: hidden; }
-        
-        .sidebar { width: 490px; background: var(--panel-bg); box-shadow: 4px 0 20px rgba(0,0,0,0.05); padding: 24px; display: flex; flex-direction: column; height: 100%; z-index: 10; overflow-y: auto; border-right: 1px solid var(--border); }
-        .header-area { margin-bottom: 20px; }
-        h1 { font-size: 20px; font-weight: 800; margin: 0 0 4px 0; color: #1e293b; letter-spacing: -0.5px; }
-        .subtitle { font-size: 11px; color: var(--text-muted); }
-        
-        .form-group { margin-bottom: 12px; }
-        label { display: block; margin-bottom: 4px; font-weight: 700; font-size: 12px; color: #334155; }
-        input[type="text"] { width: 100%; padding: 12px 14px; border: 1px solid var(--border); border-radius: 8px; font-size: 14px; background: #f8fafc; font-weight: 600; }
-        .btn-search { width: 100%; padding: 14px; background: var(--accent); color: white; border: none; border-radius: 8px; font-size: 15px; font-weight: 700; cursor: pointer; margin-top: 5px; box-shadow: 0 4px 10px rgba(37, 99, 243, 0.15); }
-        
-        .result-box { margin-top: 18px; display: none; }
-        .route-summary { background: #eff6ff; border-radius: 10px; padding: 14px; margin-bottom: 14px; font-size: 13px; font-weight: bold; color: #1e40af; line-height: 1.4; }
-        
-        .timeline-container { position: relative; padding-left: 24px; margin-top: 10px; }
-        .timeline-container::before { content: ''; position: absolute; left: 7px; top: 8px; bottom: 8px; width: 2px; background: #cbd5e1; }
-        
-        .timeline-node { position: relative; margin-bottom: 20px; font-size: 13px; line-height: 1.5; }
-        .timeline-node::before { content: ''; position: absolute; left: -21px; top: 4px; width: 8px; height: 8px; border-radius: 50%; background: #94a3b8; border: 2px solid white; box-shadow: 0 0 0 2px #cbd5e1; }
-        .timeline-node.highlight::before { background: var(--accent); box-shadow: 0 0 0 2px #93c5fd; }
-        .timeline-node.transfer::before { background: #ea580c; box-shadow: 0 0 0 2px #fed7aa; }
-        
-        .node-title { font-weight: 700; color: #0f172a; font-size: 14px; margin-bottom: 2px; display: flex; align-items: center; justify-content: space-between; }
-        .node-desc { color: #64748b; font-size: 12.5px; margin-top: 4px; background: #f8fafc; padding: 8px 10px; border-radius: 6px; border: 1px solid #f1f5f9; }
-        .station-badge { display: inline-block; padding: 2px 6px; border-radius: 4px; font-size: 11px; font-weight: bold; color: white; background: #475569; }
-        
-        .log-box { background: #0f172a; color: #38bdf8; font-family: monospace; font-size: 11px; padding: 10px; border-radius: 6px; height: 110px; overflow-y: auto; margin-top: auto; }
-        
-        #map-container { flex-grow: 1; height: 100vh; position: relative; }
-        #map { width: 100%; height: 100%; }
-    </style>
+<meta charset="UTF-8">
+<title>배리어프리 환승 경로 안내</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Black+Han+Sans&family=Noto+Sans+KR:wght@400;500;700;900&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --navy-deep:#0B1F33;
+    --navy-panel:#122a45;
+    --paper:#F2EFE9;
+    --safety-amber:#FFC857;
+    --line-teal:#2E86AB;
+    --alert-coral:#E4572E;
+    --line-hair:rgba(242,239,233,0.14);
+    --ok-green:#3FA66A;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0;
+    background:var(--navy-deep);
+    color:var(--paper);
+    font-family:'Noto Sans KR', sans-serif;
+    -webkit-font-smoothing:antialiased;
+  }
+  .wrap{
+    max-width:1180px;
+    margin:0 auto;
+    padding:36px 28px 60px;
+  }
+  header.hero{
+    display:flex;
+    justify-content:space-between;
+    align-items:flex-end;
+    gap:24px;
+    border-bottom:1px solid var(--line-hair);
+    padding-bottom:22px;
+    margin-bottom:28px;
+    flex-wrap:wrap;
+  }
+  .hero-left .eyebrow{
+    font-family:'JetBrains Mono', monospace;
+    font-size:12px;
+    letter-spacing:0.18em;
+    color:var(--safety-amber);
+    text-transform:uppercase;
+    margin-bottom:10px;
+  }
+  .hero-left h1{
+    font-family:'Black Han Sans', sans-serif;
+    font-size:clamp(28px,4vw,44px);
+    line-height:1.15;
+    margin:0 0 8px 0;
+    letter-spacing:0.01em;
+  }
+  .hero-left p{
+    margin:0;
+    color:rgba(242,239,233,0.68);
+    font-size:14.5px;
+    max-width:560px;
+  }
+  .team-badge{
+    font-family:'JetBrains Mono', monospace;
+    font-size:12px;
+    border:1px solid rgba(242,239,233,0.3);
+    border-radius:100px;
+    padding:8px 16px;
+    color:rgba(242,239,233,0.8);
+    white-space:nowrap;
+  }
+  .team-badge b{color:var(--safety-amber);}
+
+  .grid{
+    display:grid;
+    grid-template-columns:360px 1fr;
+    gap:24px;
+  }
+  @media (max-width:860px){ .grid{grid-template-columns:1fr;} }
+
+  .panel{
+    background:var(--navy-panel);
+    border:1px solid var(--line-hair);
+    border-radius:14px;
+    padding:22px 22px 24px;
+  }
+  .panel h2{
+    font-size:13px;
+    letter-spacing:0.08em;
+    text-transform:uppercase;
+    font-family:'JetBrains Mono', monospace;
+    color:var(--safety-amber);
+    margin:0 0 16px 0;
+  }
+  label.field-label{
+    display:block;
+    font-size:12.5px;
+    color:rgba(242,239,233,0.6);
+    margin-bottom:6px;
+  }
+  .field{ margin-bottom:16px; }
+  input[type="text"]{
+    width:100%;
+    padding:11px 12px;
+    background:rgba(242,239,233,0.06);
+    border:1px solid rgba(242,239,233,0.22);
+    border-radius:8px;
+    color:var(--paper);
+    font-size:14.5px;
+    font-family:inherit;
+  }
+  input[type="text"]:focus{ outline:2px solid var(--safety-amber); outline-offset:1px; border-color:transparent;}
+  .swap-row{ display:flex; align-items:center; gap:8px; margin:-6px 0 14px; }
+  .swap-btn{
+    background:none;border:1px solid rgba(242,239,233,0.25);
+    color:var(--paper); border-radius:8px; padding:4px 10px; font-size:12px; cursor:pointer;
+  }
+  .swap-btn:hover{ border-color:var(--safety-amber); color:var(--safety-amber); }
+
+  button.primary{
+    width:100%;
+    background:var(--safety-amber);
+    color:#1a1400;
+    border:none;
+    padding:13px 14px;
+    border-radius:8px;
+    font-weight:700;
+    font-size:15px;
+    cursor:pointer;
+    font-family:'Noto Sans KR',sans-serif;
+    transition:transform .12s ease;
+  }
+  button.primary:hover{ transform:translateY(-1px); }
+  button.primary:active{ transform:translateY(0); }
+  button.primary:disabled{ opacity:.5; cursor:not-allowed; transform:none; }
+
+  .divider{ height:1px; background:var(--line-hair); margin:20px 0; }
+
+  .fault-list{
+    display:flex;
+    flex-wrap:wrap;
+    gap:8px;
+    max-height:220px;
+    overflow-y:auto;
+    padding-right:4px;
+  }
+  .fault-chip{
+    font-size:12.5px;
+    padding:6px 10px;
+    border-radius:100px;
+    border:1px solid rgba(242,239,233,0.25);
+    background:transparent;
+    color:rgba(242,239,233,0.8);
+    cursor:pointer;
+    font-family:'Noto Sans KR',sans-serif;
+    white-space:nowrap;
+  }
+  .fault-chip.broken{
+    background:var(--alert-coral);
+    border-color:var(--alert-coral);
+    color:#1a0a04;
+    font-weight:700;
+  }
+  .hint{ font-size:12px; color:rgba(242,239,233,0.5); margin-top:10px; line-height:1.5;}
+
+  /* result panel */
+  .result-panel{ min-height:520px; display:flex; flex-direction:column; }
+  .status-row{ display:flex; gap:10px; margin-bottom:18px; flex-wrap:wrap; }
+  .stat{
+    flex:1;
+    min-width:110px;
+    background:rgba(242,239,233,0.05);
+    border:1px solid var(--line-hair);
+    border-radius:10px;
+    padding:12px 14px;
+  }
+  .stat .num{ font-family:'JetBrains Mono',monospace; font-size:22px; font-weight:600; color:var(--safety-amber); }
+  .stat .lbl{ font-size:11.5px; color:rgba(242,239,233,0.55); margin-top:2px; }
+
+  /* LED strip - signature element */
+  .led-strip{
+    background:#050d17;
+    border:1px solid rgba(255,200,87,0.25);
+    border-radius:10px;
+    padding:16px 18px;
+    margin-bottom:18px;
+    overflow:hidden;
+    position:relative;
+  }
+  .led-strip .led-label{
+    font-family:'JetBrains Mono',monospace;
+    font-size:10.5px;
+    letter-spacing:0.15em;
+    color:rgba(255,200,87,0.55);
+    margin-bottom:10px;
+  }
+  .led-track{
+    display:flex;
+    align-items:center;
+    gap:2px;
+    overflow-x:auto;
+    padding-bottom:4px;
+  }
+  .led-node{
+    display:flex;
+    align-items:center;
+    flex-shrink:0;
+  }
+  .led-dot{
+    width:14px;height:14px;border-radius:50%;
+    background:#1c2f45;
+    border:2px solid rgba(255,200,87,0.3);
+    opacity:0;
+    transform:scale(.3);
+    transition:opacity .25s ease, transform .25s ease, background .25s ease, box-shadow .25s ease;
+  }
+  .led-dot.lit{
+    opacity:1; transform:scale(1);
+    background:var(--safety-amber);
+    box-shadow:0 0 10px 2px rgba(255,200,87,0.55);
+    border-color:var(--safety-amber);
+  }
+  .led-dot.transfer.lit{ background:#fff; box-shadow:0 0 10px 2px rgba(255,255,255,0.6); border-color:#fff;}
+  .led-connector{
+    width:22px; height:2px; background:rgba(255,200,87,0.15); flex-shrink:0;
+  }
+  .led-connector.lit{ background:rgba(255,200,87,0.6); }
+
+  .route-list{ display:flex; flex-direction:column; gap:0; flex:1; overflow-y:auto; padding-right:4px;}
+  .stop{
+    display:flex;
+    gap:14px;
+    padding:12px 2px;
+    border-bottom:1px dashed var(--line-hair);
+    align-items:flex-start;
+    opacity:0;
+    transform:translateY(6px);
+    animation:stopIn .35s ease forwards;
+  }
+  .stop:last-child{ border-bottom:none; }
+  @keyframes stopIn{ to{ opacity:1; transform:translateY(0);} }
+  .stop .marker{
+    width:34px; flex-shrink:0; text-align:center; padding-top:2px;
+    font-family:'JetBrains Mono',monospace; font-size:11px; color:rgba(242,239,233,0.4);
+  }
+  .stop .line-dot{
+    width:12px;height:12px;border-radius:50%;
+    display:inline-block; margin-bottom:4px;
+    border:2px solid rgba(0,0,0,0.15);
+  }
+  .stop .body{ flex:1; }
+  .stop .name-row{ display:flex; align-items:center; gap:8px; flex-wrap:wrap;}
+  .stop .name{ font-size:16px; font-weight:700; }
+  .stop .line-badge{
+    font-size:10.5px; font-family:'JetBrains Mono',monospace; font-weight:600;
+    padding:2px 7px; border-radius:5px; color:#0B1F33;
+  }
+  .stop .meta{ font-size:12px; color:rgba(242,239,233,0.55); margin-top:4px; }
+  .stop.blocked-warning .name{ color:var(--alert-coral); }
+  .transfer-flag{
+    font-size:10.5px; font-family:'JetBrains Mono',monospace;
+    color:var(--navy-deep); background:#fff; border-radius:5px; padding:2px 7px; font-weight:700;
+  }
+
+  .empty-state, .error-state{
+    flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center;
+    text-align:center; color:rgba(242,239,233,0.5); padding:40px 20px;
+  }
+  .empty-state svg, .error-state svg{ margin-bottom:14px; opacity:.6; }
+  .error-state{ color:var(--alert-coral); }
+  .error-state .sub{ color:rgba(242,239,233,0.55); font-size:13px; margin-top:6px; max-width:340px; }
+
+  .algo-note{
+    margin-top:22px;
+    font-size:12.5px;
+    line-height:1.7;
+    color:rgba(242,239,233,0.6);
+  }
+  .algo-note b{ color:var(--paper); }
+  .algo-note code{ font-family:'JetBrains Mono',monospace; background:rgba(242,239,233,0.08); padding:1px 5px; border-radius:4px; }
+
+  datalist{}
+  ::-webkit-scrollbar{ width:8px; height:8px; }
+  ::-webkit-scrollbar-thumb{ background:rgba(242,239,233,0.18); border-radius:4px; }
+</style>
 </head>
 <body>
+<div class="wrap">
 
-    <div class="sidebar">
-        <div class="header-area">
-            <h1>수도권 전역 실시간 노선 추적 내비 v4.0</h1>
-            <div class="subtitle">카카오맵 API 연계 정밀 100% 선로 매핑 시스템</div>
-        </div>
-        
-        <div class="form-group">
-            <label>출발역 명칭</label>
-            <input type="text" id="startInput" value="철산">
-        </div>
-        
-        <div class="form-group">
-            <label>도착역 명칭</label>
-            <input type="text" id="endInput" value="의정부">
-        </div>
-        
-        <button class="btn-search" onclick="executeRealTransitRouteQuery()">실시간 실제 노선 궤적 분석 및 색상 반영</button>
-        
-        <div id="resultBox" class="result-box"></div>
-        
-        <div class="log-box" id="logBox">카카오 서비스 허브 대기 중...</div>
+  <header class="hero">
+    <div class="hero-left">
+      <div class="eyebrow">BFS 기반 · 배리어프리 환승 내비게이션</div>
+      <h1>계단 없는 역만 골라가는<br>교통약자 환승 경로 웹</h1>
+      <p>너비 우선 탐색(BFS)으로 수도권 지하철망에서 최소 정차역 경로를 계산하고, 엘리베이터 고장 역을 탐색 대상에서 실시간으로 제외합니다.</p>
+    </div>
+    <div class="team-badge">팀명 <b>태양</b> · 30303 김두성</div>
+  </header>
+
+  <div class="grid">
+    <!-- LEFT: controls -->
+    <div class="panel">
+      <h2>경로 검색</h2>
+
+      <div class="field">
+        <label class="field-label" for="start">출발역</label>
+        <input type="text" id="start" list="stationList" placeholder="예: 청량리" value="청량리">
+      </div>
+
+      <div class="swap-row">
+        <button class="swap-btn" id="swapBtn" type="button">⇅ 출발·도착 바꾸기</button>
+      </div>
+
+      <div class="field">
+        <label class="field-label" for="end">도착역</label>
+        <input type="text" id="end" list="stationList" placeholder="예: 고속터미널" value="고속터미널">
+      </div>
+
+      <datalist id="stationList"></datalist>
+
+      <button class="primary" id="findBtn" type="button">실시간 배리어프리 경로 계산</button>
+
+      <div class="divider"></div>
+
+      <h2>실시간 데이터 연동</h2>
+      <button class="primary" id="loadLiveBtn" type="button" style="background:var(--line-teal); color:#fff;">지금 바로 새로고침</button>
+      <div class="hint" id="liveStatus">'경로 계산' 버튼을 누르면 자동으로 서울 열린데이터광장 API를 먼저 불러온 뒤 경로를 계산합니다. 이 버튼은 데이터만 수동으로 다시 불러오고 싶을 때 눌러주세요.</div>
+
+      <div class="divider"></div>
+
+      <h2>엘리베이터 고장 시뮬레이션</h2>
+      <div class="fault-list" id="faultList"></div>
+      <div class="hint">역을 클릭하면 '엘리베이터 고장' 상태로 표시됩니다. 실제 서비스에서는 공공데이터포털의 역사 편의시설 실시간 API가 이 목록을 자동으로 갱신합니다 — 지금은 데모를 위해 수동으로 토글합니다.</div>
     </div>
 
-    <div id="map-container">
-        <div id="map"></div>
+    <!-- RIGHT: results -->
+    <div class="panel result-panel">
+      <h2>실시간 실제 노선 계산 분석</h2>
+
+      <div id="resultArea" style="flex:1; display:flex; flex-direction:column;">
+        <div class="empty-state" id="emptyState">
+          <svg width="46" height="46" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4"><circle cx="12" cy="12" r="9"/><path d="M8 12h8M12 8v8"/></svg>
+          출발역과 도착역을 입력하고<br>경로 계산 버튼을 눌러주세요.
+        </div>
+      </div>
+
+      <div class="algo-note">
+        <b>알고리즘 동작 방식</b> — 지하철역 전체를 그래프의 정점(node)으로, 인접한 두 역 사이의 선로를 간선(edge)으로 표현합니다. 출발역에서 <code>BFS</code>를 수행하며 <code>elevatorOk = false</code>인 역은 탐색 대기열(queue)에 아예 진입시키지 않아, 최단 정차역 수를 보장하면서도 엘리베이터가 없는 역을 원천적으로 우회합니다. 환승은 같은 역에 여러 호선이 겹치는 지점으로 자동 판정됩니다.
+      </div>
     </div>
+  </div>
+</div>
 
 <script>
-    const KAKAO_APP_KEY = "8de5afcac7c14db9f30e9d2a2a29ce4f";
-    
-    let kakaoMap = null;
-    let activePolylines = [];
-    let activeMarkers = [];
+/* =========================================================
+   1. 수도권 지하철 노선 데이터 (샘플 서브셋)
+   실제 서비스에서는 이 구조를 공공데이터포털 API 응답으로 대체합니다.
+   ========================================================= */
+const LINE_COLORS = {
+  "1호선":"#0032A0", "2호선":"#00A84D", "3호선":"#EF7C1C", "4호선":"#00A5DE",
+  "5호선":"#996CAC", "6호선":"#CD7C2F", "7호선":"#747F00", "8호선":"#E6186C",
+  "9호선":"#BDB092", "분당선":"#FABE00", "공항철도":"#0090D2", "경의중앙선":"#77C4A3"
+};
 
-    // 지하철 고유 컬러 규격 정의
-    const COLOR_7HOSUN = "#697214"; // 7호선 올리브색
-    const COLOR_1HOSUN = "#003DA5"; // 1호선 남색
+const LINES = {
+  "1호선": ["서울역","시청","종각","종로3가","종로5가","동대문","신설동","제기동","청량리"],
+  "2호선": ["시청","을지로입구","을지로3가","을지로4가","동대문역사문화공원","신당","상왕십리","왕십리","한양대","뚝섬","성수","건대입구","잠실나루","잠실","삼성","선릉","역삼","강남","교대","서초","방배","사당","신대방","신림","구로디지털단지","신도림","영등포구청","당산","합정","홍대입구","신촌","이대","아현","충정로"],
+  "3호선": ["구파발","연신내","불광","홍제","무악재","독립문","경복궁","안국","종로3가","을지로3가","충무로","동대입구","약수","금호","옥수","압구정","신사","잠원","고속터미널","교대","남부터미널","양재","도곡","수서","가락시장","경찰병원","오금"],
+  "4호선": ["노원","창동","쌍문","수유","미아","길음","성신여대입구","한성대입구","혜화","동대문","동대문역사문화공원","충무로","명동","회현","서울역","숙대입구","삼각지","신용산","이촌","동작","이수","사당","남태령"],
+  "5호선": ["김포공항","송정","마곡","발산","우장산","화곡","까치산","신정","목동","오목교","양평","영등포구청","신길","여의도","여의나루","마포","공덕","애오개","충정로","서대문","광화문","종로3가","을지로4가","동대문역사문화공원","청구","신금호","행당","왕십리","마장","답십리","장한평","군자","아차산","광나루","천호","강동","길동","굽은다리","명일","고덕","상일동"],
+  "6호선": ["응암","역촌","불광","독바위","연신내","구산","새절","증산","디지털미디어시티","월드컵경기장","마포구청","망원","합정","상수","광흥창","대흥","공덕","효창공원앞","삼각지","녹사평","이태원","한강진","버티고개","약수","청구","신당","동묘앞","창신","보문","안암","고려대","월곡","상월곡","돌곶이","석계","태릉입구","화랑대","봉화산"],
+  "7호선": ["장암","도봉산","수락산","마들","노원","중계","하계","공릉","태릉입구","먹골","중화","상봉","면목","사가정","용마산","중곡","군자","어린이대공원","건대입구","뚝섬유원지","청담","강남구청","학동","논현","반포","고속터미널","이수","남성","숭실대입구","상도","장승배기","신대방삼거리","보라매","신풍","대림","남구로","가산디지털단지","철산","광명사거리","천왕"],
+  "8호선": ["암사","천호","강동구청","몽촌토성","잠실","석촌","송파","가락시장","문정","장지","복정","산성","남한산성입구","단대오거리","신흥","수진","모란"],
+  "9호선": ["김포공항","공항시장","신방화","마곡나루","양천향교","가양","증미","등촌","염창","신목동","선유도","당산","국회의사당","여의도","노량진","동작","구반포","신반포","고속터미널","사평","신논현","언주","선정릉","삼성중앙","봉은사","종합운동장","삼전","석촌고분","석촌","송파나루","한성백제","올림픽공원","둔촌오륜","중앙보훈병원"],
+  "분당선": ["청량리","왕십리","서울숲","압구정로데오","강남구청","선정릉","선릉","한티","도곡","구룡","개포동","대모산입구","수서","복정","모란"],
+  "공항철도": ["서울역","공덕","홍대입구","디지털미디어시티","김포공항","계양","검암","청라국제도시","영종","운서","공항화물청사","인천공항1터미널","인천공항2터미널"],
+  "경의중앙선": ["서울역","용산","이촌","서빙고","한남","옥수","응봉","왕십리","청량리"]
+};
 
-    function pushLog(text, isError = false) {
-        const box = document.getElementById("logBox");
-        if(box.innerText.includes("대기 중...")) box.innerText = "";
-        const colorStyle = isError ? "color:#ef4444; font-weight:bold;" : "color:#38bdf8;";
-        box.innerHTML += `<span style="${colorStyle}">> ${text}</span><br>`;
-        box.scrollTop = box.scrollHeight;
+/* 시뮬레이션 대상으로 노출할 주요 환승/거점역 목록 */
+const FAULT_TOGGLE_STATIONS = ["서울역","시청","종로3가","동대문역사문화공원","왕십리","을지로3가","충무로","약수","청구","신당","공덕","합정","고속터미널","교대","사당","이수","노원","불광","연신내","김포공항","여의도","강남구청","도곡","수서","잠실","가락시장","복정","모란"];
+
+/* =========================================================
+   2. 그래프 구성 + 상태 저장
+   ========================================================= */
+const graph = new Map();     // station -> [{to, line}]
+const stationLines = new Map(); // station -> Set(line)
+const elevatorOk = new Map();    // station -> boolean
+
+function addEdge(a, b, line){
+  if(!graph.has(a)) graph.set(a, []);
+  if(!graph.has(b)) graph.set(b, []);
+  graph.get(a).push({to:b, line});
+  graph.get(b).push({to:a, line});
+}
+
+for(const [line, seq] of Object.entries(LINES)){
+  for(let i=0;i<seq.length;i++){
+    const st = seq[i];
+    if(!stationLines.has(st)) stationLines.set(st, new Set());
+    stationLines.get(st).add(line);
+    if(!elevatorOk.has(st)) elevatorOk.set(st, true);
+    if(i>0) addEdge(seq[i-1], st, line);
+  }
+}
+
+const ALL_STATIONS = Array.from(stationLines.keys()).sort((a,b)=>a.localeCompare(b,'ko'));
+
+/* 데모용 결정론적 "엘리베이터 인근 권장 승/하차 칸-문" 생성 (샘플 데이터, API 미연동 시 폴백)
+   실제 서비스라면 역별 엘리베이터/리프트 위치를, 스크린도어 안내와 동일한 "칸-문" 표기
+   (예: 3-3 → 3번째 칸의 3번째 문)로 공공데이터 API에서 그대로 받아오면 됩니다. */
+function recommendedBoardingFallback(station){
+  let h1 = 0, h2 = 0;
+  for(const ch of station){
+    h1 = (h1*31 + ch.charCodeAt(0)) >>> 0;
+    h2 = (h2*17 + ch.charCodeAt(0) + 7) >>> 0;
+  }
+  const car = (h1 % 10) + 1;   // 1~10번째 칸
+  const door = (h2 % 4) + 1;   // 칸 내 1~4번째 문
+  return { text:`${car}-${door}`, live:false };
+}
+
+/* 실시간 API 데이터가 있으면 그걸, 없으면 샘플값을 반환 */
+function recommendedBoarding(station){
+  if(liveFacilityData && liveFacilityData.has(station)){
+    const d = liveFacilityData.get(station);
+    const loc = d.elevatorLoc || d.liftLoc;
+    if(loc) return { text: loc, live:true };
+  }
+  return recommendedBoardingFallback(station);
+}
+
+/* =========================================================
+   실시간 데이터 연동 — 서울 열린데이터광장
+   "지하철역 빠른하차정보 현황" API
+   ========================================================= */
+const SEOUL_API_KEY = '5678706f5864736b32365244527a6d';
+
+// TODO ①: data.seoul.go.kr 해당 API 상세페이지의 "OpenAPI 활용" 탭에 있는
+// 샘플 요청 URL을 그대로 옮겨 적어주세요. URL 형태 예시:
+//   http://openapi.seoul.go.kr:8088/(인증키)/json/서비스명/1/5/
+// 위 URL에서 "(인증키)" 다음, "/json/" 다음에 오는 문자열이 서비스명입니다.
+const SEOUL_API_SERVICE = 'TODO_서비스명_여기에';
+
+const SEOUL_API_BASE = 'https://openapi.seoul.go.kr:8088'; // mixed-content 방지를 위해 https 사용
+
+// TODO ②: 실제 응답 JSON 하나를 브라우저 주소창에 위 URL을 넣고 열어본 뒤,
+// 필드명을 그대로 아래에 채워주시면 정확하게 매핑해드릴게요.
+// (예: 역명이 "STN_NM"으로 오는지 "역명"으로 오는지는 API마다 달라요)
+const FIELD_MAP = {
+  station:     'STN_NM',   // 역명 필드명
+  line:        'LN_NM',    // 호선 필드명
+  elevatorLoc: 'ELVTR_LC', // 엘리베이터 위치(칸-문) 필드명
+  liftLoc:     'LFT_LC'    // 리프트 위치(칸-문) 필드명
+};
+
+let liveFacilityData = null; // station -> {elevatorLoc, liftLoc}
+
+async function loadLiveElevatorData(){
+  const statusEl = document.getElementById('liveStatus');
+  const btn = document.getElementById('loadLiveBtn');
+  btn.disabled = true;
+  statusEl.textContent = '서울시 API 호출 중...';
+  try{
+    const url = `${SEOUL_API_BASE}/${SEOUL_API_KEY}/json/${SEOUL_API_SERVICE}/1/1000/`;
+    const res = await fetch(url);
+    if(!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
+    const serviceRoot = data[SEOUL_API_SERVICE];
+    if(!serviceRoot || !serviceRoot.row){
+      throw new Error('응답 구조가 예상과 다릅니다 (서비스명 또는 필드명을 확인해주세요)');
     }
+    liveFacilityData = new Map();
+    serviceRoot.row.forEach(r=>{
+      const name = r[FIELD_MAP.station];
+      if(!name) return;
+      liveFacilityData.set(name, {
+        elevatorLoc: r[FIELD_MAP.elevatorLoc] || null,
+        liftLoc: r[FIELD_MAP.liftLoc] || null
+      });
+    });
+    statusEl.textContent = `실시간 데이터 ${liveFacilityData.size}개 역 로드 완료 — 이제 경로를 다시 계산하면 출발/도착역에 실제 위치가 표시됩니다.`;
+  }catch(err){
+    console.error('[서울시 API 오류]', err);
+    statusEl.textContent = `불러오기 실패: ${err.message}. 콘솔(F12)에서 자세한 오류를 확인해주세요 — CORS 차단이거나 SEOUL_API_SERVICE/FIELD_MAP 값이 실제 응답과 다를 수 있습니다.`;
+  }finally{
+    btn.disabled = false;
+  }
+}
 
-    function initKakaoMapSDK() {
-        if (!KAKAO_APP_KEY) {
-            pushLog("❌ KAKAO_APP_KEY 누락", true);
-            return;
-        }
-        const script = document.createElement('script');
-        script.src = `https://dapi.kakao.com/v2/maps/sdk.js?appkey=${KAKAO_APP_KEY}&autoload=false&libraries=services`;
-        script.async = true;
-        
-        script.onload = () => {
-            if (typeof kakao !== 'undefined' && kakao.maps) {
-                kakao.maps.load(() => {
-                    try {
-                        const container = document.getElementById('map');
-                        kakaoMap = new kakao.maps.Map(container, { center: new kakao.maps.LatLng(37.5665, 126.9780), level: 7 });
-                        pushLog("🗺 [성공] 카카오 맵 정밀 연산 모듈 로드 완료.");
-                    } catch (mapErr) {
-                        pushLog("❌ 지도 로드 오류", true);
-                    }
-                });
-            }
-        };
-        document.head.appendChild(script);
+document.getElementById('loadLiveBtn').addEventListener('click', loadLiveElevatorData);
+
+
+/* =========================================================
+   3. 초기 UI 세팅
+   ========================================================= */
+const stationListEl = document.getElementById('stationList');
+ALL_STATIONS.forEach(s=>{
+  const opt = document.createElement('option');
+  opt.value = s;
+  stationListEl.appendChild(opt);
+});
+
+const faultListEl = document.getElementById('faultList');
+FAULT_TOGGLE_STATIONS.forEach(s=>{
+  const chip = document.createElement('button');
+  chip.type = 'button';
+  chip.className = 'fault-chip';
+  chip.textContent = s;
+  chip.dataset.station = s;
+  chip.addEventListener('click', ()=>{
+    const cur = elevatorOk.get(s);
+    elevatorOk.set(s, !cur);
+    chip.classList.toggle('broken', cur); // cur was true -> now broken
+  });
+  faultListEl.appendChild(chip);
+});
+
+document.getElementById('swapBtn').addEventListener('click', ()=>{
+  const s = document.getElementById('start');
+  const e = document.getElementById('end');
+  const tmp = s.value; s.value = e.value; e.value = tmp;
+});
+
+/* =========================================================
+   4. BFS — 엘리베이터 고장 역을 탐색 큐에서 원천 차단
+   ========================================================= */
+function findBarrierFreeRoute(start, end){
+  if(!graph.has(start) || !graph.has(end)){
+    return { error: 'NOT_FOUND' };
+  }
+  const startBlocked = elevatorOk.get(start) === false;
+  const endBlocked = elevatorOk.get(end) === false;
+
+  const visited = new Set([start]);
+  const prev = new Map(); // station -> {from, line}
+  const queue = [start];
+  let qi = 0;
+  let found = false;
+
+  while(qi < queue.length){
+    const cur = queue[qi++];
+    if(cur === end){ found = true; break; }
+    const neighbors = graph.get(cur) || [];
+    for(const {to, line} of neighbors){
+      if(visited.has(to)) continue;
+      // 엘리베이터 고장 역은 출발/도착역이 아닌 이상 탐색 대상에서 제외
+      if(elevatorOk.get(to) === false && to !== end) continue;
+      visited.add(to);
+      prev.set(to, {from:cur, line});
+      queue.push(to);
     }
+  }
 
-    // 💡 [카카오맵 정밀 추적] 선로 위를 100% 따라가기 위한 카카오 내비게이션 궤적 파싱 및 가동 로직
-    async function fetchKakaoTrackPath(startCoords, endCoords) {
-        // 실제 카카오 맵 백엔드 서비스의 교통축 세그먼트 데이터를 역추적하기 위한 가상 링커
-        // 외부 프록시 없이 카카오 SDK 서비스의 고해상도 지오메트리 궤적을 실시간으로 추정 결합합니다.
-        return new Promise((resolve) => {
-            // 철산역에서 의정부역까지의 전체 궤적 데이터를 실제 굴곡점(Shape) 위주로 분할 계산합니다.
-            // 7호선 도심 통과 구간 및 1호선 경원선 북상 구간의 100% 매칭 데이터 셋
-            setTimeout(() => {
-                const mapData = {
-                    track7: [
-                        {lat: 37.476192, lng: 126.868211}, {lat: 37.481225, lng: 126.882650},
-                        {lat: 37.486241, lng: 126.887413}, {lat: 37.492982, lng: 126.895822},
-                        {lat: 37.496000, lng: 126.901000}, {lat: 37.500078, lng: 126.909051},
-                        {lat: 37.501980, lng: 126.920422}, {lat: 37.499701, lng: 126.929941},
-                        {lat: 37.504893, lng: 126.938848}, {lat: 37.502848, lng: 126.947935},
-                        {lat: 37.496515, lng: 126.953609}, {lat: 37.484986, lng: 126.971032},
-                        {lat: 37.486263, lng: 126.982210}, {lat: 37.487618, lng: 126.993078},
-                        {lat: 37.504810, lng: 127.004941}, {lat: 37.508178, lng: 127.011707},
-                        {lat: 37.511093, lng: 127.021415}, {lat: 37.514219, lng: 127.030350},
-                        {lat: 37.517319, lng: 127.041215}, {lat: 37.519080, lng: 127.051893},
-                        {lat: 37.525000, lng: 127.060000}, {lat: 37.531541, lng: 127.066704},
-                        {lat: 37.540401, lng: 127.069221}, {lat: 37.548013, lng: 127.074658},
-                        {lat: 37.557117, lng: 127.079541}, {lat: 37.565860, lng: 127.084178},
-                        {lat: 37.573619, lng: 127.086704}, {lat: 37.580020, lng: 127.087815},
-                        {lat: 37.588641, lng: 127.087541}, {lat: 37.596041, lng: 127.085141},
-                        {lat: 37.602513, lng: 127.081708}, {lat: 37.609715, lng: 127.077841},
-                        {lat: 37.617180, lng: 127.075115}, {lat: 37.625719, lng: 127.073041},
-                        {lat: 37.637841, lng: 127.069415}, {lat: 37.648315, lng: 127.064117},
-                        {lat: 37.655118, lng: 127.061041}, {lat: 37.664193, lng: 127.057704},
-                        {lat: 37.675841, lng: 127.054415}, {lat: 37.689215, lng: 127.046708}
-                    ],
-                    track1: [
-                        {lat: 37.689215, lng: 127.046708}, {lat: 37.695000, lng: 127.046900},
-                        {lat: 37.702000, lng: 127.045500}, {lat: 37.709941, lng: 127.047115},
-                        {lat: 37.717000, lng: 127.044000}, {lat: 37.724810, lng: 127.042941},
-                        {lat: 37.732000, lng: 127.043500}, {lat: 37.738362, lng: 127.045956}
-                    ]
-                };
-                resolve(mapData);
-            }, 300);
-        });
+  if(!found){
+    return { error: 'NO_ROUTE' };
+  }
+
+  // 경로 역추적
+  const path = [end];
+  const lineOfHop = [];
+  let cursor = end;
+  while(cursor !== start){
+    const p = prev.get(cursor);
+    path.push(p.from);
+    lineOfHop.push(p.line);
+    cursor = p.from;
+  }
+  path.reverse();
+  lineOfHop.reverse();
+
+  // 환승 지점 계산
+  const hopLines = [null, ...lineOfHop]; // hopLines[i] = line used to arrive at path[i]
+  const transfers = [];
+  for(let i=1;i<path.length;i++){
+    if(i>1 && hopLines[i] !== hopLines[i-1]){
+      transfers.push(path[i-1]);
     }
+  }
 
-    function drawPrecisionTracks(tracks, steps) {
-        if (!kakaoMap) return;
+  return { path, hopLines, transfers, startBlocked, endBlocked };
+}
 
-        // 기존 요소 초기화
-        activePolylines.forEach(p => p.setMap(null));
-        activeMarkers.forEach(m => m.setMap(null));
-        activePolylines = []; activeMarkers = [];
+/* =========================================================
+   5. 렌더링
+   ========================================================= */
+const resultArea = document.getElementById('resultArea');
 
-        let bounds = new kakao.maps.LatLngBounds();
+function lineBadge(line){
+  const color = LINE_COLORS[line] || '#999';
+  return `<span class="line-badge" style="background:${color}">${line}</span>`;
+}
 
-        // 1. 7호선 정밀 트랙 그리기 (올리브색)
-        let points7 = tracks.track7.map(c => new kakao.maps.LatLng(c.lat, c.lng));
-        let poly7 = new kakao.maps.Polyline({
-            path: points7, strokeWeight: 6, strokeColor: COLOR_7HOSUN, strokeOpacity: 1.0, strokeStyle: 'solid'
-        });
-        poly7.setMap(kakaoMap);
-        activePolylines.push(poly7);
-        points7.forEach(p => bounds.extend(p));
+function renderBoardingLine(label, boarding){
+  const [car, door] = boarding.text.split('-');
+  const tag = boarding.live
+    ? '<span style="color:var(--ok-green);font-weight:700;">실시간</span>'
+    : '<span style="color:rgba(242,239,233,0.45);">샘플 추정</span>';
+  return ` · 엘리베이터 인근 권장 ${label} 칸-문: <b>${boarding.text}</b> (앞에서 ${car}번째 칸, 그 칸의 ${door}번째 문) [${tag}]`;
+}
 
-        // 2. 1호선 정밀 트랙 그리기 (남색)
-        let points1 = tracks.track1.map(c => new kakao.maps.LatLng(c.lat, c.lng));
-        let poly1 = new kakao.maps.Polyline({
-            path: points1, strokeWeight: 6, strokeColor: COLOR_1HOSUN, strokeOpacity: 1.0, strokeStyle: 'solid'
-        });
-        poly1.setMap(kakaoMap);
-        activePolylines.push(poly1);
-        points1.forEach(p => bounds.extend(p));
+function renderError(msg, sub){
+  resultArea.innerHTML = `
+    <div class="error-state">
+      <svg width="42" height="42" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="12" cy="12" r="9"/><path d="M12 8v5M12 16h.01"/></svg>
+      <div>${msg}</div>
+      <div class="sub">${sub}</div>
+    </div>`;
+}
 
-        // 시작/도착지 마커 생성
-        if (points7.length > 0 && points1.length > 0) {
-            activeMarkers.push(new kakao.maps.Marker({ position: points7[0], map: kakaoMap }));
-            activeMarkers.push(new kakao.maps.Marker({ position: points1[points1.length - 1], map: kakaoMap }));
-        }
+function renderRoute(result, startName, endName){
+  const { path, hopLines, transfers, startBlocked, endBlocked } = result;
+  const stationCount = path.length;
+  const transferCount = transfers.length;
 
-        // 지도가 경로에 맞게 보기 좋게 스케일 자동 조절
-        kakaoMap.setBounds(bounds);
+  // LED strip
+  let ledHtml = `<div class="led-strip"><div class="led-label">REAL-TIME BFS · 탐색 진행</div><div class="led-track" id="ledTrack">`;
+  path.forEach((st, i)=>{
+    const isTransfer = transfers.includes(st);
+    ledHtml += `<div class="led-node"><div class="led-dot${isTransfer?' transfer':''}" data-i="${i}"></div></div>`;
+    if(i < path.length-1) ledHtml += `<div class="led-connector" data-i="${i}"></div>`;
+  });
+  ledHtml += `</div></div>`;
 
-        // UI 대시보드 출력
-        const resultBox = document.getElementById("resultBox");
-        let timelineHTML = '';
-        
-        steps.forEach(step => {
-            let nodeClass = "timeline-node" + (step.type === "STATION" ? " highlight" : step.type === "TRANSFER" ? " transfer" : "");
-            timelineHTML += `
-                <div class="${nodeClass}">
-                    <div class="node-title">
-                        <span>${step.title}</span>
-                        ${step.line ? `<span class="station-badge" style="background:${step.color || '#475569'}">${step.line}</span>` : ''}
-                    </div>
-                    <div class="node-desc">${step.desc}</div>
-                </div>
-            `;
-        });
+  // stats
+  const statsHtml = `
+    <div class="status-row">
+      <div class="stat"><div class="num">${stationCount}</div><div class="lbl">경유역 수</div></div>
+      <div class="stat"><div class="num">${transferCount}</div><div class="lbl">환승 횟수</div></div>
+      <div class="stat"><div class="num">${stationCount<=1?0:(stationCount-1)*2}</div><div class="lbl">예상 소요(분)</div></div>
+    </div>`;
 
-        resultBox.innerHTML = `
-            <div class="route-summary">🗺 카카오맵 정밀 대중교통 API 연동 완료<br><span style="font-size:11px; font-weight:normal; color:#64748b;">(기찻길 선로 중심축 100% 완벽 추적 맵 매칭)</span></div>
-            <div class="timeline-container">${timelineHTML}</div>
-        `;
-        resultBox.style.display = "block";
-    }
+  // route list
+  let listHtml = `<div class="route-list">`;
+  path.forEach((st, i)=>{
+    const isTransfer = transfers.includes(st);
+    const isFirst = i===0, isLast = i===path.length-1;
+    const line = isFirst ? hopLines[0] : hopLines[i-1];
+    const color = LINE_COLORS[line] || '#999';
+    const linesHere = Array.from(stationLines.get(st));
+    const blockedButEndpoint = (isFirst && startBlocked) || (isLast && endBlocked);
+    listHtml += `
+      <div class="stop${blockedButEndpoint?' blocked-warning':''}" style="animation-delay:${i*0.05}s">
+        <div class="marker">${String(i+1).padStart(2,'0')}</div>
+        <div class="body">
+          <div class="name-row">
+            <span class="line-dot" style="background:${color}"></span>
+            <span class="name">${st}</span>
+            ${isFirst?'<span class="line-badge" style="background:'+ (LINE_COLORS[linesHere[0]]||'#999') +'">출발</span>':''}
+            ${isLast?'<span class="line-badge" style="background:'+color+'">도착</span>':''}
+            ${isTransfer?'<span class="transfer-flag">환승</span>':''}
+          </div>
+          <div class="meta">
+            ${linesHere.map(l=>lineBadge(l)).join(' ')}
+            ${isFirst?renderBoardingLine('승차', recommendedBoarding(st)):''}
+            ${isLast?renderBoardingLine('하차', recommendedBoarding(st)):''}
+            ${blockedButEndpoint?' · ⚠ 이 역은 현재 엘리베이터 고장 상태입니다 (출발/도착지라 경로에는 포함됨)':''}
+          </div>
+        </div>
+      </div>`;
+  });
+  listHtml += `</div>`;
 
-    async function executeRealTransitRouteQuery() {
-        const start = document.getElementById("startInput").value.trim().replace(/역$/, "");
-        const end = document.getElementById("endInput").value.trim().replace(/역$/, "");
+  resultArea.innerHTML = statsHtml + ledHtml + listHtml;
 
-        if(!start || !end) { return alert("출발역과 도착역을 입력해 주세요."); }
+  // LED 점등 애니메이션 (BFS 진행처럼 순차 점등)
+  const dots = resultArea.querySelectorAll('.led-dot');
+  const conns = resultArea.querySelectorAll('.led-connector');
+  dots.forEach((d,i)=>{
+    setTimeout(()=>d.classList.add('lit'), i*70);
+  });
+  conns.forEach((c,i)=>{
+    setTimeout(()=>c.classList.add('lit'), i*70+35);
+  });
+}
 
-        pushLog(`📡 [카카오맵 API 연계] [${start}] ➔ [${end}] 선로 매칭 및 정밀 상세 경로 연산 중...`);
+/* =========================================================
+   6. 이벤트 바인딩
+   ========================================================= */
+document.getElementById('findBtn').addEventListener('click', async ()=>{
+  const start = document.getElementById('start').value.trim();
+  const end = document.getElementById('end').value.trim();
 
-        // 기본 좌표 정의 (철산역 및 의정부역 카카오맵 공식 주소 노드 기준)
-        let startCoords = { lat: 37.476192, lng: 126.868211 };
-        let endCoords = { lat: 37.738362, lng: 127.045956 };
+  if(!start || !end){
+    renderError('출발역과 도착역을 모두 입력해주세요.', '역 이름을 입력하면 자동완성 목록이 나타납니다.');
+    return;
+  }
+  if(!graph.has(start) || !graph.has(end)){
+    renderError('일치하는 역을 찾을 수 없습니다.', '현재 데모는 수도권 지하철 노선망의 일부 표본 데이터만 포함하고 있습니다. 자동완성 목록에서 역을 선택해주세요.');
+    return;
+  }
+  if(start === end){
+    renderError('출발역과 도착역이 동일합니다.', '서로 다른 역을 입력해주세요.');
+    return;
+  }
 
-        // 카카오맵 100% 정밀 선로 추적 좌표셋 가져오기
-        let precisionTracks = await fetchKakaoTrackPath(startCoords, endCoords);
+  // 아직 실시간 데이터를 한 번도 못 불러왔다면, 경로 계산과 동시에 자동으로 시도
+  const findBtn = document.getElementById('findBtn');
+  if(liveFacilityData === null){
+    findBtn.disabled = true;
+    findBtn.textContent = '실시간 위치 정보 불러오는 중...';
+    await loadLiveElevatorData();
+    findBtn.textContent = '실시간 배리어프리 경로 계산';
+    findBtn.disabled = false;
+  }
 
-        // 카카오맵 API 기반 상세 길 안내 구조화
-        let detailedNavigationSteps = [
-            { 
-                type: "STATION", 
-                title: `${start}역 승차 안내`, 
-                line: "7호선", 
-                color: COLOR_7HOSUN, 
-                desc: "카카오맵 실시간 안내: 7호선 도봉산/장암 방면 승강장 진입 후 전동차 탑승." 
-            },
-            { 
-                type: "TRACK", 
-                title: "7호선 고유 선로 완벽 매핑 구간", 
-                line: "7호선", 
-                color: COLOR_7HOSUN, 
-                desc: "가산디지털단지 ➔ 대림 ➔ 고속터미널 ➔ 건대입구 ➔ 노원을 거쳐 도봉산역까지 실제 철도 궤적 100% 일치 추적 운행." 
-            },
-            { 
-                type: "TRANSFER", 
-                title: "도봉산역 대공간 내부 환승 이동", 
-                desc: "7호선 하차 후 안내 표지판을 따라 1호선 국철(경원선) 환승 게이트 및 통로를 통해 약 120m 도보 이동." 
-            },
-            { 
-                type: "TRACK", 
-                title: "1호선 지상 선로 구간 북상 운행", 
-                line: "1호선", 
-                color: COLOR_1HOSUN, 
-                desc: "도봉산역에서 1호선 소요산/의정부 방면 전동차 환승 후 망월사, 회룡을 거쳐 실제 철로를 따라 의정부역 이동." 
-            },
-            { 
-                type: "STATION", 
-                title: `${end}역 정산 및 도착`, 
-                line: "1호선", 
-                color: COLOR_1HOSUN, 
-                desc: "카카오맵 실시간 안내: 의정부역 하차 후 목적지 방향 출구 진출 완료." 
-            }
-        ];
+  const result = findBarrierFreeRoute(start, end);
+  if(result.error === 'NO_ROUTE'){
+    renderError('배리어프리 경로를 찾을 수 없습니다.', '현재 고장으로 표시된 엘리베이터 역들 때문에 연결 가능한 경로가 모두 차단되었습니다. 좌측에서 일부 역의 고장 상태를 해제해보세요.');
+    return;
+  }
+  renderRoute(result, start, end);
+});
 
-        // 렌더링 파이프라인 가동
-        drawPrecisionTracks(precisionTracks, detailedNavigationSteps);
-        pushLog(`✔ [연산 성공] 카카오맵 API 기준 100% 선로 일치 및 호선별 컬러 완벽 분리 구현 완료.`);
-    }
-
-    window.addEventListener('DOMContentLoaded', () => { initKakaoMapSDK(); });
+// 엔터 키로도 검색되도록
+['start','end'].forEach(id=>{
+  document.getElementById(id).addEventListener('keydown', (e)=>{
+    if(e.key === 'Enter') document.getElementById('findBtn').click();
+  });
+});
 </script>
 </body>
 </html>
